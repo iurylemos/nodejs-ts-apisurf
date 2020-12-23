@@ -1,0 +1,7 @@
+{
+  "name": "curso-node-ts-api",
+  "version": "1.0.0",
+  "main": "index.js",
+  "author": "Iury Lemos <iurylemos10@gmail.com>",
+  "license": "MIT"
+}
