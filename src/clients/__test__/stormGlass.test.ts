@@ -1,17 +1,24 @@
 import { StormGlass } from '@src/clients/stormGlass';
-import axios from 'axios';
 import stormGlassWeather3Hours from '@test/fixtures/stormglass_weather_3_hours.json';
 import stormGlassNormalize3Hours from '@test/fixtures/stormglass_normalized_response_3_hours.json';
+import * as HTTPUtil from '@src/util/request';
 
 //Mock para limpar o axios
-jest.mock('axios');
+jest.mock('@src/util/request');
 
 describe('StormGlass client', () => {
 
-  //Dizendo pro typescript que o mockAxios é um axios por debaixo dos panos
-  //Pegando o tipo do axios, e vai adicionar os tipos do jest mock em cima do axios
-  //E assim estou criando o mock
-  const mockAxios = axios as jest.Mocked<typeof axios>;
+  const MockedRequestClass = HTTPUtil.Request as jest.Mocked<typeof HTTPUtil.Request>;
+
+  // Dizendo pro typescript que o mockAxios é um axios por debaixo dos panos
+  // Pegando o tipo do axios, e vai adicionar os tipos do jest mock em cima do axios
+  // E assim estou criando o mock
+  // const mockAxios = axios as jest.Mocked<typeof axios>;
+  // Por que não tem o typeof como antes?
+  // Por que o HTTPUtil ele é uma instância da classe
+  // Ele não é a classe em sí como o axios era..
+  // O axios era estático, e o httputil não é
+  const MockRequest = new HTTPUtil.Request() as jest.Mocked<HTTPUtil.Request>
 
   it('should return the normalize forecast from the StormGlass service', async () => {
     const lat = 33.792726;
@@ -19,9 +26,9 @@ describe('StormGlass client', () => {
 
     // axios.get = jest.fn().mockResolvedValue({ data: stormGlassWeather3Hours });
     //Usando o mock fica assim
-    mockAxios.get.mockResolvedValue({ data: stormGlassWeather3Hours });
+    MockRequest.get.mockResolvedValue({ data: stormGlassWeather3Hours } as HTTPUtil.Response);
 
-    const stormGlass = new StormGlass(mockAxios);
+    const stormGlass = new StormGlass(MockRequest);
     const response = await stormGlass.fetchPoints(lat, lng);
     expect(response).toEqual(stormGlassNormalize3Hours);
   });
@@ -41,9 +48,9 @@ describe('StormGlass client', () => {
       ],
     };
 
-    mockAxios.get.mockResolvedValue({ data: incompleteResponse });
+    MockRequest.get.mockResolvedValue({ data: incompleteResponse } as HTTPUtil.Response);
 
-    const stormGlass = new StormGlass(mockAxios);
+    const stormGlass = new StormGlass(MockRequest);
     const response = await stormGlass.fetchPoints(lat, lng);
 
     expect(response).toEqual([]);
@@ -54,9 +61,9 @@ describe('StormGlass client', () => {
     const lat = -33.792726;
     const lng = 151.289824;
 
-    mockAxios.get.mockRejectedValue({ message: 'Network Error' });
+    MockRequest.get.mockRejectedValue({ message: 'Network Error' });
 
-    const stormGlass = new StormGlass(mockAxios);
+    const stormGlass = new StormGlass(MockRequest);
 
     await expect(stormGlass.fetchPoints(lat, lng)).rejects.toThrow(
       'Unexpected error when trying to communicate to StormGlass: Network Error'
@@ -68,14 +75,18 @@ describe('StormGlass client', () => {
     const lat = -33.792726;
     const lng = 151.289824;
 
-    mockAxios.get.mockRejectedValue({
+    // Fazendo um mock do método estático para que ele retorne true
+    // Dizendo que sim, esse é um error de request
+    MockedRequestClass.isRequestError.mockReturnValue(true);
+
+    MockRequest.get.mockRejectedValue({
       response: {
         status: 429,
         data: { errors: ['Rate Limit reached'] },
       },
     });
 
-    const stormGlass = new StormGlass(mockAxios);
+    const stormGlass = new StormGlass(MockRequest);
 
     await expect(stormGlass.fetchPoints(lat, lng)).rejects.toThrow(
       'Unexpected error returned by the StormGlass service: Error: {"errors":["Rate Limit reached"]} Code: 429'
